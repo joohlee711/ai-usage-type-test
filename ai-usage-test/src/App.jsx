@@ -360,9 +360,48 @@ export default function App() {
 
   const restart = () => { setAnswers([]); setIdx(0); setScreen("intro"); setCopied(false); };
 
-  const copyResult = async () => {
+  const buildResultText = () => {
     const t = TYPES[resultCode];
-    const text = `${t.emoji} 나의 AI 업무 유형: ${t.name}\n“${t.catch}”\n\nAI, 어떻게 쓰고 계세요? — 13문항 테스트`;
+    const axisLabels =
+      resultCode === "NNN"
+        ? ["중립", "중립", "중립"]
+        : resultCode.split("").map((k, i) => {
+            const ax = AXES[["A", "B", "C"][i]];
+            return ax.left.key === k ? ax.left.label : ax.right.label;
+          });
+    const gaugeLines = ["A", "B", "C"].map((axis) => {
+      const L = AXES[axis].left, R = AXES[axis].right;
+      const l = counts[L.key] || 0, r = counts[R.key] || 0;
+      const lp = l + r === 0 ? 50 : Math.round((l / (l + r)) * 100);
+      const filled = Math.round(lp / 10);
+      return `${L.label} ${lp}% ${"▮".repeat(filled)}${"▯".repeat(10 - filled)} ${100 - lp}% ${R.label}`;
+    });
+    return [
+      ...(resultCode === "NNN" ? ["🎉 HIDDEN CARD 발견!", ""] : []),
+      `${t.emoji} 나의 AI 업무 유형: ${t.name}`,
+      axisLabels.join(" · "),
+      `“${t.catch}”`,
+      "",
+      "[수치]",
+      ...gaugeLines,
+      "",
+      t.desc,
+      "",
+      "[강점]",
+      ...t.strengths.map((s) => `+ ${s}`),
+      "",
+      "[이런 일에 배치]",
+      ...t.goodAt.map((s) => `> ${s}`),
+      "",
+      "[⚠︎ 맡기면 안 되는 일]",
+      `${t.never.what} ${t.never.why}`,
+      "",
+      "AI, 어떻게 쓰고 계세요? — 13문항 테스트",
+    ].join("\n");
+  };
+
+  const copyResult = async () => {
+    const text = buildResultText();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
