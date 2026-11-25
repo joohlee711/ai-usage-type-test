@@ -250,7 +250,7 @@ function Gauge({ axis, counts, color }) {
 }
 
 /* 유형 상세 (모델 카드) — counts 있으면 개인 결과, 없으면 열람 모드 */
-function TypeCard({ code, counts }) {
+function TypeCard({ code, counts, onPick }) {
   const t = TYPES[code];
   const axisLabels =
     code === "NNN"
@@ -305,6 +305,30 @@ function TypeCard({ code, counts }) {
             <strong style={{ fontWeight: 700 }}>{t.never.what}</strong> {t.never.why}
           </p>
         </div>
+
+        {t.partner && (() => {
+          const p = TYPES[t.partner];
+          return (
+            <div style={{ marginTop: 24 }}>
+              <SectionLabel>Best partner</SectionLabel>
+              <button
+                onClick={() => onPick && onPick(t.partner)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
+                  cursor: onPick ? "pointer" : "default", fontFamily: T.sans, color: T.ink,
+                  border: `1px solid ${p.color}55`, background: `${p.color}0A`, borderRadius: 10, padding: "14px 16px",
+                }}
+              >
+                <span style={{ fontSize: 30, lineHeight: 1 }}>{p.emoji}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: "block", fontSize: 15, fontWeight: 700, marginBottom: 3 }}>🤝 환상의 짝꿍: {p.name}</span>
+                  <span style={{ display: "block", fontSize: 13.5, color: T.sub, lineHeight: 1.5 }}>“{p.catch}”</span>
+                </span>
+                {onPick && <span style={{ fontFamily: T.mono, fontSize: 13, color: p.color }}>→</span>}
+              </button>
+            </div>
+          );
+        })()}
       </div>
     </Card>
   );
@@ -360,9 +384,51 @@ export default function App() {
 
   const restart = () => { setAnswers([]); setIdx(0); setScreen("intro"); setCopied(false); };
 
-  const copyResult = async () => {
+  const buildResultText = () => {
     const t = TYPES[resultCode];
-    const text = `${t.emoji} 나의 AI 업무 유형: ${t.name}\n“${t.catch}”\n\nAI, 어떻게 쓰고 계세요? — 13문항 테스트`;
+    const axisLabels =
+      resultCode === "NNN"
+        ? ["중립", "중립", "중립"]
+        : resultCode.split("").map((k, i) => {
+            const ax = AXES[["A", "B", "C"][i]];
+            return ax.left.key === k ? ax.left.label : ax.right.label;
+          });
+    const gaugeLines = ["A", "B", "C"].map((axis) => {
+      const L = AXES[axis].left, R = AXES[axis].right;
+      const l = counts[L.key] || 0, r = counts[R.key] || 0;
+      const lp = l + r === 0 ? 50 : Math.round((l / (l + r)) * 100);
+      const filled = Math.round(lp / 10);
+      return `${L.label} ${lp}% ${"▮".repeat(filled)}${"▯".repeat(10 - filled)} ${100 - lp}% ${R.label}`;
+    });
+    return [
+      ...(resultCode === "NNN" ? ["🎉 HIDDEN CARD 발견!", ""] : []),
+      `${t.emoji} 나의 AI 업무 유형: ${t.name}`,
+      axisLabels.join(" · "),
+      `“${t.catch}”`,
+      "",
+      "[수치]",
+      ...gaugeLines,
+      "",
+      t.desc,
+      "",
+      "[강점]",
+      ...t.strengths.map((s) => `+ ${s}`),
+      "",
+      "[이런 일에 배치]",
+      ...t.goodAt.map((s) => `> ${s}`),
+      "",
+      "[⚠︎ 맡기면 안 되는 일]",
+      `${t.never.what} ${t.never.why}`,
+      "",
+      ...(t.partner
+        ? [`🤝 환상의 짝꿍: ${TYPES[t.partner].emoji} ${TYPES[t.partner].name}`, `“${TYPES[t.partner].catch}”`, ""]
+        : []),
+      "AI, 어떻게 쓰고 계세요? — 13문항 테스트",
+    ].join("\n");
+  };
+
+  const copyResult = async () => {
+    const text = buildResultText();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -469,7 +535,7 @@ export default function App() {
         ) : (
           <div style={{ ...monoLabel(), textAlign: "center", marginBottom: 16 }}>진단 완료 — 당신의 유형은</div>
         )}
-        <TypeCard code={resultCode} counts={counts} />
+        <TypeCard code={resultCode} counts={counts} onPick={(c) => { setBrowseCode(c); setScreen("browse"); }} />
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
           <Btn primary onClick={copyResult}>{copied ? "복사됨 ✓" : "결과 복사하기"}</Btn>
           <Btn onClick={() => { setBrowseCode(null); setScreen("browse"); }}>다른 유형 보기</Btn>
@@ -493,7 +559,7 @@ export default function App() {
           >
             ← 전체 유형
           </button>
-          <TypeCard code={browseCode} />
+          <TypeCard key={browseCode} code={browseCode} onPick={(c) => { setBrowseCode(c); window.scrollTo(0, 0); }} />
           <Btn onClick={() => (answers.length === QUESTIONS.length ? setScreen("result") : restart())} style={{ marginTop: 16 }}>
             {answers.length === QUESTIONS.length ? "내 결과로 돌아가기" : "테스트 하러 가기"}
           </Btn>
